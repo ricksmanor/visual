@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VBA HTML Generator</title>
+<style>
+body { font-family: Arial, sans-serif; padding: 20px; }
+textarea { width: 100%; height: 150px; margin-bottom: 10px; }
+input[type="text"] { width: 100%; margin-bottom: 10px; }
+pre { background: #f0f0f0; padding: 10px; white-space: pre-wrap; word-wrap: break-word; }
+</style>
+</head>
+<body>
+<h2>VBA HTML Generator</h2>
+
+<label>Message text:</label>
+<textarea id="message">Great news! Save an extra 10% on Plymouth North storage on top of our introductory offer – plus get a FREE lock (£15.99)!
+This offer is not available online. Spaces are limited, so secure your storage unit today.
+[Reserve Your Unit Now]</textarea>
+
+<label>Link URL:</label>
+<input type="text" id="link" placeholder="https://example.com">
+
+<button onclick="generateVBA()">Generate VBA HTML</button>
+
+<h3>VBA Output:</h3>
+<pre id="output"></pre>
+
+<script>
+function generateVBA() {
+    const message = document.getElementById('message').value;
+    const link = document.getElementById('link').value.trim();
+
+    // Phrases to auto-bold
+    const boldPhrases = [
+        "an extra 10% on Plymouth North storage",
+        "FREE lock (£15.99)",
+        "not available online"
+    ];
+
+    const lines = message.split('\n');
+    let html = '';
+
+    lines.forEach(line => {
+        let processed = line;
+
+        // Auto-bold phrases
+        boldPhrases.forEach(phrase => {
+            const regex = new RegExp(phrase.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g');
+            processed = processed.replace(regex, `<strong>${phrase}</strong>`);
+        });
+
+        // Convert [text] to clickable bold link with brackets
+        if(link) {
+            processed = processed.replace(/\[([^\]]+)\]/g, `<a href="${link}"><strong>[$1]</strong></a>`);
+        } else {
+            processed = processed.replace(/\[([^\]]+)\]/g, '<strong>[$1]</strong>');
+        }
+
+        // Escape quotes for VBA
+        processed = processed.replace(/"/g, '""');
+
+        html += `.HTMLBody = .HTMLBody & "<p>${processed}</p>"\n`;
+    });
+
+    document.getElementById('output').textContent = html;
+}
+</script>
+</body>
+</html>
