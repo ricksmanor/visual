@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VBA HTML Generator (with Bold Detection)</title>
+<style>
+body { font-family: Arial, sans-serif; padding: 20px; }
+#editor {
+  border: 1px solid #ccc;
+  padding: 10px;
+  min-height: 150px;
+  margin-bottom: 10px;
+}
+input[type="text"] { width: 100%; margin-bottom: 10px; }
+pre { background: #f0f0f0; padding: 10px; white-space: pre-wrap; word-wrap: break-word; }
+</style>
+</head>
+<body>
+<h2>VBA HTML Generator</h2>
+
+<label>Paste your formatted message here:</label>
+<div id="editor" contenteditable="true">
+  <p>Save an extra <strong>10% on Milton Keynes storage</strong> plus a <strong>FREE lock (£15.99)</strong>!</p>
+  <p><strong>Not online.</strong> Limited units – book your space today.</p>
+  <p>[Reserve Your Unit Now]</p>
+</div>
+
+<label>Link URL for [Reserve Your Unit Now]:</label>
+<input type="text" id="link" placeholder="https://example.com">
+
+<button onclick="generateVBA()">Generate VBA HTML</button>
+
+<h3>VBA Output:</h3>
+<pre id="output"></pre>
+
+<script>
+function generateVBA() {
+    const editor = document.getElementById('editor');
+    const link = document.getElementById('link').value.trim();
+    let html = editor.innerHTML;
+
+    // Replace [text] with bold link (keeping brackets)
+    if(link) {
+        html = html.replace(/\[([^\]]+)\]/g, `<a href="${link}"><strong>[$1]</strong></a>`);
+    } else {
+        html = html.replace(/\[([^\]]+)\]/g, '<strong>[$1]</strong>');
+    }
+
+    // Split into lines at <p> boundaries
+    const lines = html.split(/<\/p>/i).filter(l => l.trim() !== '');
+    let vba = '';
+
+    lines.forEach(line => {
+        let processed = line.trim();
+
+        // Ensure <p> wrapping
+        if(!processed.startsWith("<p")) {
+            processed = `<p>${processed}</p>`;
+        } else {
+            processed = processed + "</p>";
+        }
+
+        // Escape double quotes for VBA
+        processed = processed.replace(/"/g, '""');
+
+        vba += `.HTMLBody = .HTMLBody & "${processed}"\n`;
+    });
+
+    document.getElementById('output').textContent = vba;
+}
+</script>
+</body>
+</html>
