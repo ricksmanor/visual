@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>VBA HTML Cleaner (paste from Word/Outlook)</title>
+<title>VBA HTML Cleaner</title>
 <style>
   body { font-family: Arial, sans-serif; padding: 18px; max-width:900px; }
   #editor { border:1px solid #ccc; padding:10px; min-height:160px; margin-bottom:10px; }
@@ -13,11 +13,11 @@
 </head>
 <body>
   <h2>VBA HTML Cleaner</h2>
-  <p>Paste your formatted content from Word/Outlook into the editor (bold will be preserved).</p>
+  <p>Paste your formatted content (bold will be preserved). Each paragraph will turn into a one-line VBA string.</p>
 
   <div id="editor" contenteditable="true">
     <p>Save <strong>an extra 10% on Milton Keynes storage plus a FREE lock (£15.99)</strong>!</p>
-    <p><strong>Not online.</strong> Limited units – book your space today.</p>
+    <p>Not online. Limited units – book your space today.</p>
     <p>[Reserve Your Unit Now]</p>
   </div>
 
@@ -35,19 +35,17 @@
 
 <script>
 function cleanWordHtml(html) {
-  // Remove <o:p> and content
+  // Remove <o:p> and inline Word clutter
   html = html.replace(/<o:p>.*?<\/o:p>/gi, '');
   html = html.replace(/<o:p\s*\/>/gi, '');
-
-  // Remove class and style attributes (e.g. class="MsoNormal" style="...")
   html = html.replace(/\sclass="[^"]*"/gi, '');
   html = html.replace(/\sstyle="[^"]*"/gi, '');
 
-  // Convert <b> to <strong>, normalize tags
+  // Normalize <b> → <strong>
   html = html.replace(/<\s*b\s*>/gi, '<strong>');
   html = html.replace(/<\s*\/\s*b\s*>/gi, '</strong>');
 
-  // Remove duplicate nested strong tags like <strong><strong>... or </strong></strong>
+  // Collapse duplicate <strong>
   while (/<strong>\s*<strong>/i.test(html)) {
     html = html.replace(/<strong>\s*<strong>/gi, '<strong>');
   }
@@ -55,11 +53,8 @@ function cleanWordHtml(html) {
     html = html.replace(/<\/strong>\s*<\/strong>/gi, '</strong>');
   }
 
-  // Remove empty paragraphs
+  // Remove empty <p>
   html = html.replace(/<p>\s*(?:&nbsp;|\s)*<\/p>/gi, '');
-
-  // Trim whitespace between tags
-  html = html.replace(/>\s+</g, '><');
 
   return html.trim();
 }
@@ -69,40 +64,32 @@ function generateVBA() {
   const link = document.getElementById('link').value.trim();
   let html = editor.innerHTML || '';
 
-  // Clean Word artifacts
   html = cleanWordHtml(html);
 
-  // Replace [text] with bold link (keeping brackets)
+  // Replace [Reserve...] with link + bold
   if (link) {
-    // Avoid double-wrapping if an anchor already exists around the bracketed text:
-    // We will replace plain bracket text not already inside an <a>
-    // Simple approach: temporarily mark existing anchors
-    let anchorPlaceholders = [];
-    html = html.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, function(m){
-      anchorPlaceholders.push(m);
-      return `@@ANCHOR_${anchorPlaceholders.length-1}@@`;
-    });
-
     html = html.replace(/\[([^\]]+)\]/g, `<a href="${link}"><strong>[$1]</strong></a>`);
-
-    // restore placeholders
-    html = html.replace(/@@ANCHOR_(\d+)@@/g, function(_, n){ return anchorPlaceholders[n] || ''; });
   } else {
     html = html.replace(/\[([^\]]+)\]/g, `<strong>[$1]</strong>`);
   }
 
-  // Split into paragraph segments (split on closing </p>)
+  // Split into paragraphs
   let parts = html.split(/<\/p>/i).map(s=>s.trim()).filter(s=>s.length>0);
+
   const vbaLines = parts.map(part => {
+    // Ensure <p>...</p>
     let seg = part;
     if (!/^<p\b/i.test(seg)) seg = `<p>${seg}</p>`;
-    else seg = seg + '</p>'; // we removed the closing when split; add back
+    else seg = seg + '</p>';
 
-    // final cleanup: remove any remaining attributes on <p>
+    // Remove any attributes on <p>
     seg = seg.replace(/^<p\b[^>]*>/i, '<p>');
 
-    // Escape double quotes for VBA
+    // Escape quotes
     seg = seg.replace(/"/g, '""');
+
+    // Make sure it's all on one line
+    seg = seg.replace(/\r?\n|\r/g, ' ');
 
     return `.HTMLBody = .HTMLBody & "${seg}"`;
   });
