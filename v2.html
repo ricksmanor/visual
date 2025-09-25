@@ -1,72 +1,126 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-<meta charset="UTF-8">
-<title>VBA HTML Generator (with Bold Detection)</title>
+<meta charset="utf-8">
+<title>VBA HTML Cleaner (paste from Word/Outlook)</title>
 <style>
-body { font-family: Arial, sans-serif; padding: 20px; }
-#editor {
-  border: 1px solid #ccc;
-  padding: 10px;
-  min-height: 150px;
-  margin-bottom: 10px;
-}
-input[type="text"] { width: 100%; margin-bottom: 10px; }
-pre { background: #f0f0f0; padding: 10px; white-space: pre-wrap; word-wrap: break-word; }
+  body { font-family: Arial, sans-serif; padding: 18px; max-width:900px; }
+  #editor { border:1px solid #ccc; padding:10px; min-height:160px; margin-bottom:10px; }
+  input[type="text"]{ width:100%; padding:8px; margin-bottom:10px; }
+  button{ padding:8px 12px; margin-right:8px; }
+  pre{ background:#f7f7f7; padding:10px; white-space:pre-wrap; word-break:break-word; }
 </style>
 </head>
 <body>
-<h2>VBA HTML Generator</h2>
+  <h2>VBA HTML Cleaner</h2>
+  <p>Paste your formatted content from Word/Outlook into the editor (bold will be preserved).</p>
 
-<label>Paste your formatted message here:</label>
-<div id="editor" contenteditable="true">
-  <p>Save an extra <strong>10% on Milton Keynes storage</strong> plus a <strong>FREE lock (£15.99)</strong>!</p>
-  <p><strong>Not online.</strong> Limited units – book your space today.</p>
-  <p>[Reserve Your Unit Now]</p>
-</div>
+  <div id="editor" contenteditable="true">
+    <p>Save <strong>an extra 10% on Milton Keynes storage plus a FREE lock (£15.99)</strong>!</p>
+    <p><strong>Not online.</strong> Limited units – book your space today.</p>
+    <p>[Reserve Your Unit Now]</p>
+  </div>
 
-<label>Link URL for [Reserve Your Unit Now]:</label>
-<input type="text" id="link" placeholder="https://example.com">
+  <label>Link for [Reserve Your Unit Now]:</label>
+  <input id="link" placeholder="https://example.com">
 
-<button onclick="generateVBA()">Generate VBA HTML</button>
+  <div style="margin-bottom:10px;">
+    <button onclick="generateVBA()">Generate VBA</button>
+    <button onclick="copyOutput()">Copy Output</button>
+    <button onclick="clearEditor()">Clear Editor</button>
+  </div>
 
-<h3>VBA Output:</h3>
-<pre id="output"></pre>
+  <h3>VBA Output</h3>
+  <pre id="output"></pre>
 
 <script>
+function cleanWordHtml(html) {
+  // Remove <o:p> and content
+  html = html.replace(/<o:p>.*?<\/o:p>/gi, '');
+  html = html.replace(/<o:p\s*\/>/gi, '');
+
+  // Remove class and style attributes (e.g. class="MsoNormal" style="...")
+  html = html.replace(/\sclass="[^"]*"/gi, '');
+  html = html.replace(/\sstyle="[^"]*"/gi, '');
+
+  // Convert <b> to <strong>, normalize tags
+  html = html.replace(/<\s*b\s*>/gi, '<strong>');
+  html = html.replace(/<\s*\/\s*b\s*>/gi, '</strong>');
+
+  // Remove duplicate nested strong tags like <strong><strong>... or </strong></strong>
+  while (/<strong>\s*<strong>/i.test(html)) {
+    html = html.replace(/<strong>\s*<strong>/gi, '<strong>');
+  }
+  while (/<\/strong>\s*<\/strong>/i.test(html)) {
+    html = html.replace(/<\/strong>\s*<\/strong>/gi, '</strong>');
+  }
+
+  // Remove empty paragraphs
+  html = html.replace(/<p>\s*(?:&nbsp;|\s)*<\/p>/gi, '');
+
+  // Trim whitespace between tags
+  html = html.replace(/>\s+</g, '><');
+
+  return html.trim();
+}
+
 function generateVBA() {
-    const editor = document.getElementById('editor');
-    const link = document.getElementById('link').value.trim();
-    let html = editor.innerHTML;
+  const editor = document.getElementById('editor');
+  const link = document.getElementById('link').value.trim();
+  let html = editor.innerHTML || '';
 
-    // Replace [text] with bold link (keeping brackets)
-    if(link) {
-        html = html.replace(/\[([^\]]+)\]/g, `<a href="${link}"><strong>[$1]</strong></a>`);
-    } else {
-        html = html.replace(/\[([^\]]+)\]/g, '<strong>[$1]</strong>');
-    }
+  // Clean Word artifacts
+  html = cleanWordHtml(html);
 
-    // Split into lines at <p> boundaries
-    const lines = html.split(/<\/p>/i).filter(l => l.trim() !== '');
-    let vba = '';
-
-    lines.forEach(line => {
-        let processed = line.trim();
-
-        // Ensure <p> wrapping
-        if(!processed.startsWith("<p")) {
-            processed = `<p>${processed}</p>`;
-        } else {
-            processed = processed + "</p>";
-        }
-
-        // Escape double quotes for VBA
-        processed = processed.replace(/"/g, '""');
-
-        vba += `.HTMLBody = .HTMLBody & "${processed}"\n`;
+  // Replace [text] with bold link (keeping brackets)
+  if (link) {
+    // Avoid double-wrapping if an anchor already exists around the bracketed text:
+    // We will replace plain bracket text not already inside an <a>
+    // Simple approach: temporarily mark existing anchors
+    let anchorPlaceholders = [];
+    html = html.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, function(m){
+      anchorPlaceholders.push(m);
+      return `@@ANCHOR_${anchorPlaceholders.length-1}@@`;
     });
 
-    document.getElementById('output').textContent = vba;
+    html = html.replace(/\[([^\]]+)\]/g, `<a href="${link}"><strong>[$1]</strong></a>`);
+
+    // restore placeholders
+    html = html.replace(/@@ANCHOR_(\d+)@@/g, function(_, n){ return anchorPlaceholders[n] || ''; });
+  } else {
+    html = html.replace(/\[([^\]]+)\]/g, `<strong>[$1]</strong>`);
+  }
+
+  // Split into paragraph segments (split on closing </p>)
+  let parts = html.split(/<\/p>/i).map(s=>s.trim()).filter(s=>s.length>0);
+  const vbaLines = parts.map(part => {
+    let seg = part;
+    if (!/^<p\b/i.test(seg)) seg = `<p>${seg}</p>`;
+    else seg = seg + '</p>'; // we removed the closing when split; add back
+
+    // final cleanup: remove any remaining attributes on <p>
+    seg = seg.replace(/^<p\b[^>]*>/i, '<p>');
+
+    // Escape double quotes for VBA
+    seg = seg.replace(/"/g, '""');
+
+    return `.HTMLBody = .HTMLBody & "${seg}"`;
+  });
+
+  document.getElementById('output').textContent = vbaLines.join("\n");
+}
+
+function copyOutput(){
+  const out = document.getElementById('output').textContent;
+  if(!out) return alert('No output to copy — generate first.');
+  navigator.clipboard.writeText(out).then(()=> {
+    alert('Copied to clipboard');
+  }, ()=> alert('Could not copy'));
+}
+
+function clearEditor(){
+  document.getElementById('editor').innerHTML = '<p></p>';
+  document.getElementById('output').textContent = '';
 }
 </script>
 </body>
