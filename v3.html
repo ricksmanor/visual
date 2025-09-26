@@ -1,0 +1,121 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>VBA HTML Cleaner</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 18px; max-width:900px; }
+  #editor { border:1px solid #ccc; padding:10px; min-height:160px; margin-bottom:10px; }
+  input[type="text"]{ width:100%; padding:8px; margin-bottom:10px; }
+  button{ padding:8px 12px; margin-right:8px; }
+  pre{ background:#f7f7f7; padding:10px; white-space:pre-wrap; word-break:break-word; }
+</style>
+</head>
+<body>
+  <h2>VBA HTML Cleaner</h2>
+  <p>Paste your formatted content (bold will be preserved). Each paragraph will turn into a one-line VBA string.</p>
+
+  <div id="editor" contenteditable="true">
+    <p>Save <strong>an extra 10% on Milton Keynes storage plus a FREE lock (£15.99)</strong>!</p>
+    <p>Not online. Limited units – book your space today.</p>
+    <p>[Reserve Your Unit Now]</p>
+  </div>
+
+  <label>Link for [Reserve Your Unit Now]:</label>
+  <input id="link" placeholder="https://example.com">
+
+  <div style="margin-bottom:10px;">
+    <button onclick="generateVBA()">Generate VBA</button>
+    <button onclick="copyOutput()">Copy Output</button>
+    <button onclick="clearEditor()">Clear Editor</button>
+  </div>
+
+  <h3>VBA Output</h3>
+  <pre id="output"></pre>
+
+<script>
+function cleanWordHtml(html) {
+  // Remove <o:p> and inline Word clutter
+  html = html.replace(/<o:p>.*?<\/o:p>/gi, '');
+  html = html.replace(/<o:p\s*\/>/gi, '');
+  html = html.replace(/\sclass="[^"]*"/gi, '');
+  html = html.replace(/\sstyle="[^"]*"/gi, '');
+
+  // Normalize <b> → <strong>
+  html = html.replace(/<\s*b\s*>/gi, '<strong>');
+  html = html.replace(/<\s*\/\s*b\s*>/gi, '</strong>');
+
+  // Collapse duplicate <strong>
+  while (/<strong>\s*<strong>/i.test(html)) {
+    html = html.replace(/<strong>\s*<strong>/gi, '<strong>');
+  }
+  while (/<\/strong>\s*<\/strong>/i.test(html)) {
+    html = html.replace(/<\/strong>\s*<\/strong>/gi, '</strong>');
+  }
+
+  // Remove empty <p>
+  html = html.replace(/<p>\s*(?:&nbsp;|\s)*<\/p>/gi, '');
+
+  return html.trim();
+}
+
+function generateVBA() {
+  const editor = document.getElementById('editor');
+  const link = document.getElementById('link').value.trim();
+  let html = editor.innerHTML || '';
+
+  html = cleanWordHtml(html);
+
+  // === Auto-detect UK-style phone numbers and wrap with tel: ===
+  html = html.replace(/(\b0\d{2,4}[\s-]?\d{3,4}[\s-]?\d{3,4}\b)/g, function(match) {
+    const digitsOnly = match.replace(/\D/g, ''); // strip spaces & hyphens
+    return `<a href="tel:${digitsOnly}">${match}</a>`;
+  });
+
+  // Replace [Reserve...] or other [ ... ] with link + bold
+  if (link) {
+    html = html.replace(/\[([^\]]+)\]/g, `<a href="${link}"><strong>[$1]</strong></a>`);
+  } else {
+    html = html.replace(/\[([^\]]+)\]/g, `<strong>[$1]</strong>`);
+  }
+
+  // Split into paragraphs
+  let parts = html.split(/<\/p>/i).map(s=>s.trim()).filter(s=>s.length>0);
+
+  const vbaLines = parts.map(part => {
+    // Ensure <p>...</p>
+    let seg = part;
+    if (!/^<p\b/i.test(seg)) seg = `<p>${seg}</p>`;
+    else seg = seg + '</p>';
+
+    // Remove any attributes on <p>
+    seg = seg.replace(/^<p\b[^>]*>/i, '<p>');
+
+    // Escape quotes
+    seg = seg.replace(/"/g, '""');
+
+    // Make sure it's all on one line
+    seg = seg.replace(/\r?\n|\r/g, ' ');
+
+    return `.HTMLBody = .HTMLBody & "${seg}"`;
+  });
+
+  document.getElementById('output').textContent = vbaLines.join("\n");
+}
+
+function copyOutput(){
+  const out = document.getElementById('output').textContent;
+  if(!out) return alert('No output to copy — generate first.');
+  navigator.clipboard.writeText(out).then(()=> {
+    alert('Copied to clipboard');
+  }, ()=> alert('Could not copy'));
+}
+
+function clearEditor(){
+  document.getElementById('editor').innerHTML = '<p></p>';
+  document.getElementById('output').textContent = '';
+}
+</script>
+
+</body>
+</html>
