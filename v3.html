@@ -66,6 +66,9 @@ function generateVBA() {
 
   html = cleanWordHtml(html);
 
+  // === Normalize dashes (en/em to plain hyphen) ===
+  html = html.replace(/[–—]/g, "-");
+
   // === Auto-detect UK-style phone numbers and wrap with tel: ===
   html = html.replace(/(\b0\d{2,4}[\s-]?\d{3,4}[\s-]?\d{3,4}\b)/g, function(match) {
     const digitsOnly = match.replace(/\D/g, ''); // strip spaces & hyphens
@@ -94,7 +97,7 @@ function generateVBA() {
     // Escape quotes
     seg = seg.replace(/"/g, '""');
 
-    // Make sure it's all on one line
+    // Keep as one line
     seg = seg.replace(/\r?\n|\r/g, ' ');
 
     return `.HTMLBody = .HTMLBody & "${seg}"`;
@@ -102,6 +105,7 @@ function generateVBA() {
 
   document.getElementById('output').textContent = vbaLines.join("\n");
 }
+
 
 function copyOutput(){
   const out = document.getElementById('output').textContent;
