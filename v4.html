@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>VBA HTML Cleaner</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 18px; max-width:900px; }
+  #editor { border:1px solid #ccc; padding:10px; min-height:160px; margin-bottom:10px; }
+  input[type="text"]{ width:100%; padding:8px; margin-bottom:10px; }
+  button{ padding:8px 12px; margin-right:8px; }
+  pre{ background:#f7f7f7; padding:10px; white-space:pre-wrap; word-break:break-word; }
+</style>
+</head>
+<body>
+  <h2>VBA HTML Cleaner</h2>
+  <p>Paste your formatted content (bold will be preserved). Each paragraph will turn into a one-line VBA string.</p>
+
+  <div id="editor" contenteditable="true">
+    <p>Save <strong>an extra 10% on Milton Keynes storage plus a FREE lock (£15.99)</strong>!</p>
+    <p>Not online. Limited units – book your space today.</p>
+    <p>[Reserve Your Unit Now]</p>
+  </div>
+
+  <label>Link for [Reserve Your Unit Now]:</label>
+  <input id="link" placeholder="https://example.com">
+
+  <div style="margin-bottom:10px;">
+    <button onclick="generateVBA()">Generate VBA</button>
+    <button onclick="copyOutput()">Copy Output</button>
+    <button onclick="clearEditor()">Clear Editor</button>
+  </div>
+
+  <h3>VBA Output</h3>
+  <pre id="output"></pre>
+
+<script>
+function cleanWordHtml(html) {
+  html = html.replace(/<o:p>.*?<\/o:p>/gi, '');
+  html = html.replace(/<o:p\s*\/>/gi, '');
+  html = html.replace(/\sclass="[^"]*"/gi, '');
+  html = html.replace(/\sstyle="[^"]*"/gi, '');
+
+  html = html.replace(/<\s*b\s*>/gi, '<strong>');
+  html = html.replace(/<\s*\/\s*b\s*>/gi, '</strong>');
+
+  while (/<strong>\s*<strong>/i.test(html)) {
+    html = html.replace(/<strong>\s*<strong>/gi, '<strong>');
+  }
+  while (/<\/strong>\s*<\/strong>/i.test(html)) {
+    html = html.replace(/<\/strong>\s*<\/strong>/gi, '</strong>');
+  }
+
+  html = html.replace(/<p>\s*(?:&nbsp;|\s)*<\/p>/gi, '');
+
+  return html.trim();
+}
+
+function generateVBA() {
+  const editor = document.getElementById('editor');
+  const link = document.getElementById('link').value.trim();
+  let html = editor.innerHTML || '';
+
+  html = cleanWordHtml(html);
+
+  // Normalize dashes
+  html = html.replace(/[–—]/g, "-");
+
+  // Auto-detect UK phone numbers
+  html = html.replace(/(\b0\d{2,4}[\s-]?\d{3,4}[\s-]?\d{3,4}\b)/g, function(match) {
+    const digitsOnly = match.replace(/\D/g, '');
+    return `<a href="tel:${digitsOnly}">${match}</a>`;
+  });
+
+  // Replace [Text] with link
+  if (link) {
+    html = html.replace(/\[([^\]]+)\]/g, `<a href="${link}"><strong>$1</strong></a>`);
+  } else {
+    html = html.replace(/\[([^\]]+)\]/g, `<strong>$1</strong>`);
+  }
+
+  // Outlook-safe wrapper (table renders better than div)
+  html = `
+<table width="100%" cellpadding="0" cellspacing="0" border="0">
+<tr>
+<td style="font-family:Arial, sans-serif; font-size:14px;">
+${html}
+</td>
+</tr>
+</table>
+  `.trim();
+
+  // Escape quotes
+  html = html.replace(/"/g, '""');
+  html = html.replace(/\r?\n|\r/g, '');
+
+  // Split into safe chunks (800 chars)
+  const chunkSize = 800;
+  let chunks = [];
+  for (let i = 0; i < html.length; i += chunkSize) {
+    chunks.push(html.substring(i, i + chunkSize));
+  }
+
+  // Build VBA
+  let vba = "Dim htmlContent As String\n";
+  vba += "htmlContent = _\n";
+
+  chunks.forEach((chunk, index) => {
+    if (index === chunks.length - 1) {
+      vba += `"${chunk}"\n`;
+    } else {
+      vba += `"${chunk}" & _\n`;
+    }
+  });
+
+  vba += "\n.HTMLBody = htmlContent";
+
+  document.getElementById('output').textContent = vba;
+}
+
+function copyOutput(){
+  const out = document.getElementById('output').textContent;
+  if(!out) return alert('No output to copy — generate first.');
+  navigator.clipboard.writeText(out).then(()=> {
+    alert('Copied to clipboard');
+  }, ()=> alert('Could not copy'));
+}
+
+function clearEditor(){
+  document.getElementById('editor').innerHTML = '<p></p>';
+  document.getElementById('output').textContent = '';
+}
+</script>
+
+</body>
+</html>
